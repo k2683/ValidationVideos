@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 import os
+import re
 
-# 如果需要用绝对路径也可以，下面假设脚本和 HTML 文件都在同一个目录
 directory = "/home/magicmon/ValidationVideos"
 
-# 要插入的 HTML 片段
-reminder_html = (
+# 新的提醒文本（只包含一行提示，去掉“Attention:”前缀）
+new_reminder_html = (
     '<div class="attention" style="margin-top:20px;font-size:16px;color:red;">'
-    'Attention: Please make sure you fully play the video above before making your rating; '
-    'otherwise, replay the video before answering.'
+    'Please make sure you fully play the video above before making your rating'
     '</div>\n'
 )
 
+# 用于匹配并删除旧的 <div class="attention"> … </div> 块
+attention_pattern = re.compile(r'<div class="attention".*?</div>\s*', re.DOTALL)
+
 for filename in os.listdir(directory):
-    # 只处理 .html 文件，且跳过 index.html
     if not filename.endswith(".html") or filename == "index.html":
         continue
 
@@ -21,14 +22,15 @@ for filename in os.listdir(directory):
     with open(fullpath, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # 如果已经插入过就跳过
-    if "Attention: Please make sure you fully play" in content:
-        continue
+    # 先移除已插入的旧提醒
+    content = re.sub(attention_pattern, "", content)
 
-    # 在 </body> 前插入 reminder_html
-    new_content = content.replace("</body>", reminder_html + "</body>")
+    # 如果新的提醒尚未插入，则在 </body> 前面加入新的提醒
+    if "Please make sure you fully play the video above before making your rating" not in content:
+        content = content.replace("</body>", new_reminder_html + "</body>")
 
-    with open(fullpath, "w", encoding="utf-8") as f:
-        f.write(new_content)
-
-    print(f"Updated: {filename}")
+        with open(fullpath, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"Updated: {filename}")
+    else:
+        print(f"No changes needed: {filename}")
