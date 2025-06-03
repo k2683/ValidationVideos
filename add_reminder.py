@@ -4,13 +4,21 @@ import re
 
 directory = "/home/magicmon/ValidationVideos"
 
-# 新的提醒文本（只包含一行提示，去掉“Attention:”前缀）
-new_reminder_html = (
-    '<div class="attention" style="margin-top:20px;font-size:16px;color:red;">'
-    'Please make sure you fully play the video above before making your rating'
-    '</div>\n'
+# 定义新的说明文本块：两行原有提示 + 一行忽略声音和性别差异的提示
+new_block = (
+    '  <div class="reminder" style="margin-top:20px;font-size:16px;color:red;">\n'
+    '    Please make sure you are currently answering the questionnaire section for this comparison.\n'
+    '  </div>\n'
+    '  <div class="attention" style="margin-top:20px;font-size:16px;color:red;">\n'
+    '    Please make sure you fully play the video above before making your rating\n'
+    '  </div>\n'
+    '  <div style="margin-top:20px;font-size:16px;color:red;">\n'
+    '    Please ignore any differences in audio and the gender of the persons depicted.\n'
+    '  </div>\n'
 )
 
+# 用于匹配并删除旧的 <div class="reminder"> … </div> 块
+reminder_pattern = re.compile(r'<div class="reminder".*?</div>\s*', re.DOTALL)
 # 用于匹配并删除旧的 <div class="attention"> … </div> 块
 attention_pattern = re.compile(r'<div class="attention".*?</div>\s*', re.DOTALL)
 
@@ -22,15 +30,27 @@ for filename in os.listdir(directory):
     with open(fullpath, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # 先移除已插入的旧提醒
+    # 如果已经插入过新的“忽略声音和性别差异”的提示，就跳过
+    if "Please ignore any differences in audio and the gender of the persons" in content:
+        print(f"No changes needed: {filename}")
+        continue
+
+    # 移除旧的 reminder 和 attention 块
+    content = re.sub(reminder_pattern, "", content)
     content = re.sub(attention_pattern, "", content)
 
-    # 如果新的提醒尚未插入，则在 </body> 前面加入新的提醒
-    if "Please make sure you fully play the video above before making your rating" not in content:
-        content = content.replace("</body>", new_reminder_html + "</body>")
+    # 在第一个 <video> 标签之前插入新的说明块
+    content, count = re.subn(
+        r'(<video\b[^>]*>)',
+        new_block + r'\1',
+        content,
+        count=1
+    )
 
+    # 只有在确实找到了 <video> 并插入时才写回文件
+    if count > 0:
         with open(fullpath, "w", encoding="utf-8") as f:
             f.write(content)
         print(f"Updated: {filename}")
     else:
-        print(f"No changes needed: {filename}")
+        print(f"Skipped (no <video> tag found): {filename}")
